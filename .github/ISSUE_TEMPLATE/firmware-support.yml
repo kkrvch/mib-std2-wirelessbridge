@@ -1,0 +1,73 @@
+name: Request firmware support
+description: Request WirelessBridge support for an unsupported MST2 firmware.
+title: "[Firmware support]: "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        WirelessBridge requires a head unit with its own Wi-Fi hotspot and working wired Android Auto.
+        Support depends on the exact firmware files.
+        Check [existing requests](https://github.com/kkrvch/mib-std2-wirelessbridge/issues?q=is%3Aissue) before opening a new one.
+
+  - type: input
+    id: firmware
+    attributes:
+      label: Full firmware version
+      description: Copy the complete MST2_... software train from the unit's version information screen, not just P0480T or a similar short version.
+      placeholder: MST2_...
+    validations:
+      required: true
+
+  - type: input
+    id: unit
+    attributes:
+      label: Head unit part number
+      description: Enter the part number, including any suffix. Add the unit name if known, or enter Unknown if unavailable.
+      placeholder: "5Q0 035 864"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: wifi
+    attributes:
+      label: Built-in Wi-Fi hotspot
+      description: This means a hotspot created by the head unit itself, not by a phone or an external adapter.
+      options:
+        - "Available; a phone or computer can connect to it"
+        - "Not available"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: wired-aa
+    attributes:
+      label: Android Auto over USB
+      description: Does Android Auto work when an Android phone is connected directly to the head unit by USB?
+      options:
+        - "Works"
+        - "Does not work"
+    validations:
+      required: true
+
+  - type: textarea
+    id: stock-data
+    attributes:
+      label: Stock data archive
+      description: Run setup.sh (macOS/Linux) or setup.bat (Windows), choose Collect stock data, and attach the generated ZIP or provide a download link. If collection failed, describe the error instead.
+      placeholder: Drop the stock ZIP here, paste a download link, or explain why collection could not be completed.
+    validations:
+      required: true
+
+  - type: markdown
+    attributes:
+      value: |
+        See [Collect stock data](https://github.com/kkrvch/mib-std2-wirelessbridge/blob/main/docs/SETUP.md#collect-stock-data) for instructions.
+        Attach the generated stock archive, not the entire local folder.
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional information
+      description: Add a photo of the version screen, any existing firmware modifications, etc.
+    validations:
+      required: false

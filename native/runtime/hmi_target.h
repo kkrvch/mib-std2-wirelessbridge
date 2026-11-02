@@ -1,4 +1,4 @@
-/* P0480T only. HMI calls run exclusively on SalCommunication's Worker.
+/* Profile-validated HMI ABI. Calls run exclusively on SalCommunication's Worker.
  * GAL communicates through atomic desired/observed phases; IDLE reset is
  * acknowledged by this owner only after paired removal.
  * The permanent base references below keep these immutable objects alive for
