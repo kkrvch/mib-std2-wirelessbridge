@@ -1,0 +1,180 @@
+{
+  "schema": 1,
+  "id": "p0516t-cpu",
+  "description": "MST2_EU_SE_ZR_P0516T/cpu",
+  "libc_sha256": [
+    "8cd95332b271b4d35e32c3a6a05692dd1121b2af569fbe8529f5af43dea5cd9c"
+  ],
+  "wa": {
+    "sha256": "bfdbbf566436b634c1cb7990d0f51df619ae72d10427ad7d5e84994958f53d3b",
+    "functions": {
+      "WA_REGISTER_CMD": "0x175c84",
+      "WA_UPDATE_CMD": "0x1740d4",
+      "WA_REGISTER_HANDLER": "0x175af0",
+      "WA_QUEUE_MESSAGE": "0x1795b4",
+      "WA_LOG": "0x1224c4",
+      "WA_REGISTER_CALLBACKS": "0x168758",
+      "WA_PARSE": "0x183b10",
+      "WA_AUTHORISE_STOCK": "0x16ce2c"
+    },
+    "layout": {
+      "WA_HIFLIB": "0x14",
+      "WA_ASIP_PREFIX": "0x15",
+      "WA_PARAM_STRIDE": "0x8",
+      "WA_PARAM_SIZE": "0x4"
+    },
+    "hooks": [
+      {
+        "at": "0x169c58",
+        "kind": "bl",
+        "target": "WA_REGISTER_CALLBACKS",
+        "runtime": "waa_wa_entry",
+        "restore": "waa_ext_entry"
+      },
+      {
+        "at": "0x16984c",
+        "kind": "bl",
+        "target": "WA_PARSE",
+        "runtime": "waa_wa_rx",
+        "restore": "waa_rx_oneshot_entry"
+      },
+      {
+        "at": "0x11936c",
+        "kind": "bl",
+        "target": "WA_WAIT",
+        "runtime": "waa_wa_wait"
+      },
+      {
+        "at": "0x119400",
+        "kind": "bl",
+        "target": "WA_WAIT",
+        "runtime": "waa_wa_wait"
+      },
+      {
+        "at": "0x169944",
+        "kind": "bl",
+        "target": "WA_LOG",
+        "runtime": "waa_wa_destroy_log"
+      },
+      {
+        "at": "0x169aec",
+        "kind": "bl",
+        "target": "WA_LOG",
+        "runtime": "waa_wa_destroy_log"
+      },
+      {
+        "at": "0x168aac",
+        "kind": "bl",
+        "target": "WA_REGISTER_HANDLER",
+        "runtime": "waa_wa_register_authorise"
+      }
+    ]
+  },
+  "sal": {
+    "sha256": "d33bf87fb34ee3ee883063e3c2a6f2fa55ede74149eccc05548403eccb731bcd",
+    "functions": {
+      "A_AOA_CTOR": "0x27db64",
+      "A_DTOR0": "0x27e910",
+      "A_DTOR1": "0x27ebc8",
+      "A_UCS": "0x274e1c",
+      "A_GAL_GET": "0x273b20",
+      "SAL_CHANGE_STATE": "0x27239c",
+      "SAL_CLEAR_CONFIG": "0x28ba94",
+      "SAL_HMI_DISCOVERED": "0x324200",
+      "SAL_HMI_STATE": "0x30f95c",
+      "SAL_HMI_CONNECT": "0x310968",
+      "SAL_HMI_DISCONNECT": "0x3105fc",
+      "SAL_RUN_WORKER": "0x2d5774"
+    },
+    "data": {
+      "A_AOA_HANDLE": "0xa76378",
+      "SAL_HMI_VTABLE": "0x567248"
+    },
+    "layout": {
+      "STOPFLAG_OFF": "0x2c",
+      "SAL_GAL_STATE": "0xa40",
+      "SAL_GAL_BYEBYE": "0xa44",
+      "SAL_GAL_CONFIG": "0x77c",
+      "SAL_GAL_STOPPING": "0x7e0",
+      "SAL_CONFIG_READY": "0x2a0",
+      "SAL_HMI_OBJECT": "0x564",
+      "SAL_HMI_LISTENER": "0x238",
+      "SAL_TRANSPORT_SLOTS": "0x10",
+      "SAL_SLOT_DTOR0": "0x0",
+      "SAL_SLOT_DTOR1": "0x1",
+      "SAL_SLOT_ABORT": "0x2",
+      "SAL_SLOT_READ": "0x3",
+      "SAL_SLOT_WRITE": "0x4",
+      "SAL_HMI_DEVICE_SIZE": "0x1c"
+    },
+    "hooks": [
+      {
+        "at": "0x27817c",
+        "kind": "bl",
+        "target": "A_AOA_CTOR",
+        "runtime": "waa_tcp_ctor_hook"
+      },
+      {
+        "at": "0x563a88",
+        "kind": "word",
+        "target": "A_UCS",
+        "runtime": "waa_ucs_wrapper"
+      },
+      {
+        "at": "0x563a7c",
+        "kind": "word",
+        "target": "A_HANDLETIMEOUT",
+        "runtime": "waa_tcp_pump"
+      },
+      {
+        "at": "0x565ed4",
+        "kind": "word",
+        "target": "A_HANDLETIMEOUT",
+        "runtime": "waa_hmi_worker"
+      },
+      {
+        "at": "0x567250",
+        "kind": "word",
+        "target": "SAL_HMI_CONNECT",
+        "runtime": "waa_hmi_connect"
+      },
+      {
+        "at": "0x567254",
+        "kind": "word",
+        "target": "SAL_HMI_DISCONNECT",
+        "runtime": "waa_hmi_disconnect"
+      },
+      {
+        "at": "0x30e48c",
+        "kind": "bl",
+        "target": "SAL_HMI_DISCOVERED",
+        "runtime": "waa_hmi_discovered"
+      },
+      {
+        "at": "0x565ec8",
+        "kind": "keep",
+        "target": "SAL_RUN_WORKER"
+      }
+    ]
+  },
+  "gal_sha256": [
+    "c2f0ff71ea386986d37e1df2ffb2c93cddbe6c9025bec7b753fa4f66008cf52c",
+    "a70b9d68c4803054a7542510d3dd720a3f1da93e7e4cd508e59d7b4296d10dd6"
+  ],
+  "gal_reader_shape_sha256": "2fdd1b2b898cff9f0e762ec9f751799ef3737636738cf0a94e780e5f26736bb7",
+  "gal_reader": {
+    "shape_ranges": [
+      [
+        "0x84",
+        24
+      ],
+      [
+        "0xb8",
+        4
+      ]
+    ],
+    "copy_call": "0x9c",
+    "read_call": "0xbc",
+    "plt_max_distance": "0x20000"
+  }
+}
