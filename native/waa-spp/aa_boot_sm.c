@@ -10,6 +10,10 @@
 #define AA_ID_VER_RESP 5u
 #define AA_ID_CONN_STAT 6u
 #define AA_ID_START_RESP 7u
+/* Keepalive: WifiPingRequest / WifiPingResponse. */
+#define AA_ID_PING_REQ 8u
+#define AA_ID_PING_RESP 9u
+#define AA_PING_MAX 32u /* a PingRequest is one varint timestamp */
 
 static void boot_fail(struct aa_boot *b, int st) { b->state = st; }
 
@@ -117,10 +121,22 @@ static int send_wifi_info(struct aa_boot *b) {
     return send_frame(b, frame, n);
 }
 
+/* Echo WifiPingRequest as WifiPingResponse. Unlike send_frame, a failure is only logged. */
+static void answer_ping(struct aa_boot *b, const unsigned char *payload, unsigned int len) {
+    uint8_t frame[4 + AA_PING_MAX];
+    uint32_t n = 0;
+    if (len <= AA_PING_MAX)
+        n = aa_raw_frame(frame, sizeof(frame), AA_ID_PING_RESP, payload, len);
+    if (!n || waa_spp_send(b->hl, b->inst, frame, n) != 0) {
+        Log(b->hl, 1, "AA_BOOT: WifiPingResponse not sent (%u B)\n", len);
+        return;
+    }
+    boot_flush_tx(b);
+}
+
 /* aa_rx_feed callback: one complete AA frame (id + opaque payload). NEVER completes the SM. */
 static int on_frame(void *ctx, unsigned int id, const unsigned char *payload, unsigned int len) {
     struct aa_boot *b = (struct aa_boot *)ctx;
-    (void)payload;
     switch (b->state) {
     case AA_BOOT_START_SENT:
         if (id != AA_ID_INFO_REQ) {
@@ -136,6 +152,11 @@ static int on_frame(void *ctx, unsigned int id, const unsigned char *payload, un
         /* Post-WifiInfoResponse frames per the enum. Their payload schemas are NOT recovered, so
          * they are logged OPAQUE and do NOT mean success (success == TCP accept). An id outside the
          * known enum is a protocol fault. */
+        if (id == AA_ID_PING_REQ) {
+            Log(b->hl, 1, "AA_BOOT: <- WifiPingRequest (%u B) -> WifiPingResponse\n", len);
+            answer_ping(b, payload, len);
+            return 0; /* keepalive; stay in WAIT_TCP */
+        }
         if (id == AA_ID_VER_REQ || id == AA_ID_VER_RESP || id == AA_ID_CONN_STAT ||
             id == AA_ID_START_RESP) {
             Log(b->hl, 1, "AA_BOOT: <- id=%u (%u B, OPAQUE/UNKNOWN; not a success)\n", id, len);
@@ -198,3 +219,45 @@ int aa_boot_tcp_accepted(struct aa_boot *b) {
 }
 
 int aa_boot_state(const struct aa_boot *b) { return b ? b->state : AA_BOOT_ERROR; }
+
+/* aa_rx_feed callback after bootstrap: logs id/length only and never fails the parser. */
+static int on_late_frame(void *ctx, unsigned int id, const unsigned char *payload,
+                         unsigned int len) {
+    struct aa_boot *b = (struct aa_boot *)ctx;
+    if (b->listen_only) {
+        Log(b->hl, 1, "AA_BOOT: <- id=%u (%u B) on reconnected channel; not answered\n", id, len);
+        return 0;
+    }
+    if (id == AA_ID_PING_REQ) {
+        Log(b->hl, 1, "AA_BOOT: <- WifiPingRequest (%u B) after bootstrap -> WifiPingResponse\n",
+            len);
+        answer_ping(b, payload, len);
+        return 0;
+    }
+    Log(b->hl, 1, "AA_BOOT: <- id=%u (%u B) after bootstrap; ignored\n", id, len);
+    return 0;
+}
+
+void aa_boot_serve(struct aa_boot *b) {
+    uint8_t buf[256];
+    uint32_t n, guard = 0;
+    if (!b || (b->state != AA_BOOT_WAIT_TCP && b->state != AA_BOOT_DONE) || b->rx.failed ||
+        !waa_spp_ready(b->inst))
+        return;
+    /* bounded per pump: the SPP RX buffer holds at most 4096 bytes */
+    while (guard++ < 16u && (n = waa_spp_read(b->inst, buf, sizeof(buf))) != 0) {
+        if (aa_rx_feed(&b->rx, buf, n, on_late_frame, b) != 0) {
+            Log(b->hl, 1, "AA_BOOT: malformed frame after bootstrap; channel no longer parsed\n");
+            return;
+        }
+    }
+}
+
+void aa_boot_rechannel(struct aa_boot *b) {
+    if (!b)
+        return;
+    aa_rx_reset(&b->rx);
+    b->listen_only = 1;
+    if (b->state == AA_BOOT_WAIT_TCP || b->state == AA_BOOT_DONE)
+        Log(b->hl, 1, "AA_BOOT: SPP channel reopened after bootstrap; logging frames only\n");
+}

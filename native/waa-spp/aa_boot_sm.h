@@ -5,6 +5,7 @@
  * [payload length u16 BE][message ID u16 BE][protobuf payload].
  * Send WifiStartRequest, receive WifiInfoRequest, then send WifiInfoResponse.
  * Other message payloads are opaque; only TCP acceptance completes bootstrap.
+ * WifiPingRequest is answered by echoing its payload as WifiPingResponse.
  * Bind the head-unit TCP listener before starting. Deadlines use caller-supplied
  * monotonic milliseconds, not the number of polling calls. */
 #include <stdint.h>
@@ -46,6 +47,7 @@ struct aa_boot {
     uint32_t bt_timeout_ms;  /* deadline budget for WifiInfoRequest                      */
     uint32_t tcp_timeout_ms; /* deadline budget for the TCP accept                       */
     uint32_t deadline_ms;    /* absolute deadline for the current waiting state          */
+    uint32_t listen_only;    /* reconnected channel: log frames, never answer            */
     struct aa_rx rx;
 };
 
@@ -63,5 +65,10 @@ int aa_boot_poll(struct aa_boot *b, uint32_t now_ms);
  * Valid only in AA_BOOT_WAIT_TCP; returns the new state (AA_BOOT_DONE) or leaves an error. */
 int aa_boot_tcp_accepted(struct aa_boot *b);
 int aa_boot_state(const struct aa_boot *b);
+/* After bootstrap: drain the SPP channel, log frame ids and answer WifiPingRequest. Never changes
+ * the state; a framing fault only stops parsing until aa_boot_rechannel. */
+void aa_boot_serve(struct aa_boot *b);
+/* A new SPP channel was opened: restart framing and only log its frames until aa_boot_init. */
+void aa_boot_rechannel(struct aa_boot *b);
 
 #endif

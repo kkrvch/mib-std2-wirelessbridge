@@ -56,7 +56,9 @@ def remember(directory, records):
 
 
 def download(device, directory, *, reuse=True):
-    directory.mkdir(parents=True, mode=0o700, exist_ok=False)
+    # Update's checksum helper may already have created the workspace.
+    directory.mkdir(parents=True, mode=0o700, exist_ok=True)
+    require(not (directory / "inputs").exists(), "Capture workspace already has inputs")
     records = {}
     total = reused = 0
     for index, (name, remote) in enumerate(REMOTE.items(), 1):

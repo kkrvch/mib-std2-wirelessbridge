@@ -79,6 +79,16 @@ unsigned int aa_wifi_frame(unsigned char *out, unsigned int capacity, const stru
     varint(&w, wifi->ap_type);
     return finish(&w, 3);
 }
+unsigned int aa_raw_frame(unsigned char *out, unsigned int capacity, unsigned int id,
+                          const unsigned char *payload, unsigned int size) {
+    struct writer w = {out, 4, capacity, 0};
+    unsigned int i;
+    if (!out || capacity < 4 || id > 65535u || (!payload && size))
+        return 0;
+    for (i = 0; i < size && !w.failed; ++i)
+        byte(&w, payload[i]);
+    return finish(&w, id);
+}
 void aa_rx_reset(struct aa_rx *rx) {
     rx->header_used = rx->payload_used = rx->length = rx->id = rx->failed = 0;
 }

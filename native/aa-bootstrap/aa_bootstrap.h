@@ -15,6 +15,8 @@ struct aa_wifi {
 unsigned int aa_start_frame(unsigned char *out, unsigned int capacity, struct aa_bytes ip,
                             unsigned int port);
 unsigned int aa_wifi_frame(unsigned char *out, unsigned int capacity, const struct aa_wifi *wifi);
+unsigned int aa_raw_frame(unsigned char *out, unsigned int capacity, unsigned int id,
+                          const unsigned char *payload, unsigned int size);
 struct aa_rx {
     unsigned char header[4], payload[AA_RX_LIMIT];
     unsigned int header_used, payload_used, length, id, failed;

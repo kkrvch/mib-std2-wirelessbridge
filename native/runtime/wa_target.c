@@ -391,6 +391,7 @@ void waa_wa_pump(void) {
             wa_spp_disconnect_pending = 0;
             if (!waa_spp_open(HL_OF(wa_handler), wa_instance)) {
                 wa_phone_seen = 1;
+                aa_boot_rechannel(&wa_boot);
                 if (wa_control.used) {
                     wa_next_channel = 1;
                     /* SPP is a bootstrap channel, not the accepted TCP session's
@@ -437,6 +438,9 @@ void waa_wa_pump(void) {
     }
     if (wa_control.state == WH_SESSION && aa_boot_state(&wa_boot) == AA_BOOT_WAIT_TCP)
         aa_boot_tcp_accepted(&wa_boot);
+    /* The phone keeps the SPP channel after bootstrap; drain it and answer keepalives. */
+    if (wa_phone_seen && wa_control.state != WH_BOOT)
+        aa_boot_serve(&wa_boot);
     if (wa_phone_seen)
         waa_spp_tick(HL_OF(wa_handler), wa_instance);
     fc_flush(&wa_fifo);
