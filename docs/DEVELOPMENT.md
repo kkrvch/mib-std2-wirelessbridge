@@ -47,5 +47,3 @@ versions. Setup refuses any WA/SAL pair without an exact profile match.
 To request a new version, run **Collect stock data** on that unit and open an issue
 with the firmware version. Any installation attempt on an unknown version creates the
 same archive automatically.
-A new profile must be validated on hardware before it is added to the list of
-supported firmware in the README.

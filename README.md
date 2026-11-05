@@ -46,6 +46,7 @@ In everyday use:
 | MST2_EU_SE_ZR_P0514T | cpu |
 | MST2_EU_SE_ZR_P0516T | cpu |
 | MST2_CN_VW_PQ_P0478T | cpu |
+| MST2_EU_VW_PQ_P0478T | cpu |
 
 Firmware without an exact profile match is refused. To ask for one, collect stock data
 from your unit as described in
