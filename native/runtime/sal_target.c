@@ -2,6 +2,7 @@
 #include "qnx_runtime.h"
 #include "wifi_peer.h"
 #include "wifi_runtime.h"
+#include "sal_imports.h"
 #include "handoff.c"
 #include "control_wire.c"
 #include "fifo_channel.h"
@@ -93,7 +94,7 @@ void waa_tcp_pump(void *worker) {
     if (sal_disabled)
         goto stock;
     if (!sal_initialized) {
-        if (qr_init() || qr_now(&now)) {
+        if (qr_init() || sal_resolve_imports() || qr_now(&now)) {
             sal_disabled = 1;
             goto stock;
         }

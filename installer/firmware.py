@@ -16,24 +16,25 @@ INPUTS = {
     "libc": "runtime/libc.so.3",
     "gal": "runtime/gal.so",
 }
+SOCKET_EXPORTS = {
+    "A_" + name.upper(): name
+    for name in (
+        "socket",
+        "bind",
+        "listen",
+        "accept",
+        "recv",
+        "send",
+        "shutdown",
+        "setsockopt",
+        "close",
+        "fcntl",
+    )
+}
 EXPORTS = {
     "wa": {"WA_WAIT": "_ZN3tsd6common3ipc4waitEj"},
     "sal": {
-        **{
-            "A_" + n.upper(): n
-            for n in (
-                "socket",
-                "bind",
-                "listen",
-                "accept",
-                "recv",
-                "send",
-                "shutdown",
-                "setsockopt",
-                "close",
-                "fcntl",
-            )
-        },
+        **SOCKET_EXPORTS,
         "A_HANDLETIMEOUT": "_ZN3tsd12connectivity6common3itc6Worker13handleTimeoutEv",
         "SAL_STRING_CTOR": "_ZNSsC1EPKcRKSaIcE",
     },
@@ -86,6 +87,15 @@ def number(value):
 def resolve_role(raw, spec, role):
     require(sha256(raw) == spec["sha256"], f"Changed {role} input")
     image = Image(raw, "ET_EXEC")
+    runtime_exports = spec.get("runtime_exports", [])
+    require(
+        isinstance(runtime_exports, list)
+        and all(isinstance(name, str) for name in runtime_exports)
+        and len(runtime_exports) == len(set(runtime_exports))
+        and (not runtime_exports or role == "sal")
+        and set(runtime_exports) <= SOCKET_EXPORTS.keys(),
+        "Invalid runtime exports",
+    )
     names = [*spec["functions"], *spec.get("data", {}), *spec["layout"], *EXPORTS[role]]
     require(
         len(names) == len(set(names)) and not any(n.startswith("QR_") for n in names),
@@ -101,7 +111,13 @@ def resolve_role(raw, spec, role):
         constants[name] = address
     for macro, name in EXPORTS[role].items():
         require(macro not in constants, "Profile overrides public ELF symbol: " + macro)
-        constants[macro] = image.function(name)
+        if macro in runtime_exports:
+            require(
+                not any(s.name == name for s in image.symbols()),
+                "Runtime export already present in ELF: " + name,
+            )
+        else:
+            constants[macro] = image.function(name)
     constants.update({name: number(v) for name, v in spec["layout"].items()})
     constants["QR_READ_GOT"] = image.got("read")
     constants.update(
@@ -128,12 +144,17 @@ def resolve_role(raw, spec, role):
         require(actual == expected, f"Unexpected {role} hook at {address:#x}")
         hooks.append(dict(hook, at=address, expected=expected))
     image.note_header()
-    return {
+    result = {
         "sha256": sha256(raw),
         "base": image.base,
         "constants": constants,
         "hooks": hooks,
     }
+    if runtime_exports:
+        result["runtime_exports"] = {
+            macro: SOCKET_EXPORTS[macro] for macro in runtime_exports
+        }
+    return result
 
 
 def reader_layout(profile):
@@ -247,6 +268,12 @@ def write_headers(binding, output):
         profile.append("#if defined(WAA_ROLE_" + role.upper() + ")")
         for name, value in sorted(binding[role]["constants"].items()):
             profile.append(f"#define {name} 0x{value:x}")
+        if exports := binding[role].get("runtime_exports"):
+            profile.extend(f"static unsigned {name};" for name in exports)
+            profile.append(
+                "#define WAA_RUNTIME_EXPORTS(X) "
+                + " ".join(f'X({macro}, "{name}")' for macro, name in exports.items())
+            )
         profile.append("#endif")
     profile.append("#endif")
     for name, spec in binding["libc"]["functions"].items():

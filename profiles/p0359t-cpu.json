@@ -1,0 +1,187 @@
+{
+  "schema": 1,
+  "id": "p0359t-cpu",
+  "description": "MST2_EU_SK_PQ_P0359T/cpu",
+  "libc_sha256": [
+    "23b9ddb94a538d6c6bdeb368177bb58683169eaad02d362e00fdc67c9b30a763"
+  ],
+  "wa": {
+    "sha256": "f665a93c7afd045b636499bada3a8aa38bc05a0608fb3fb3c843cb0194d6e316",
+    "functions": {
+      "WA_REGISTER_CMD": "0x179c10",
+      "WA_UPDATE_CMD": "0x178060",
+      "WA_REGISTER_HANDLER": "0x179a7c",
+      "WA_QUEUE_MESSAGE": "0x17d540",
+      "WA_LOG": "0x120a68",
+      "WA_REGISTER_CALLBACKS": "0x167a28",
+      "WA_PARSE": "0x187a9c",
+      "WA_AUTHORISE_STOCK": "0x16c0fc"
+    },
+    "layout": {
+      "WA_HIFLIB": "0x14",
+      "WA_ASIP_PREFIX": "0x15",
+      "WA_PARAM_STRIDE": "0x8",
+      "WA_PARAM_SIZE": "0x4"
+    },
+    "hooks": [
+      {
+        "at": "0x168f28",
+        "kind": "bl",
+        "target": "WA_REGISTER_CALLBACKS",
+        "runtime": "waa_wa_entry",
+        "restore": "waa_ext_entry"
+      },
+      {
+        "at": "0x168b1c",
+        "kind": "bl",
+        "target": "WA_PARSE",
+        "runtime": "waa_wa_rx",
+        "restore": "waa_rx_oneshot_entry"
+      },
+      {
+        "at": "0x11936c",
+        "kind": "bl",
+        "target": "WA_WAIT",
+        "runtime": "waa_wa_wait"
+      },
+      {
+        "at": "0x119400",
+        "kind": "bl",
+        "target": "WA_WAIT",
+        "runtime": "waa_wa_wait"
+      },
+      {
+        "at": "0x168c14",
+        "kind": "bl",
+        "target": "WA_LOG",
+        "runtime": "waa_wa_destroy_log"
+      },
+      {
+        "at": "0x168dbc",
+        "kind": "bl",
+        "target": "WA_LOG",
+        "runtime": "waa_wa_destroy_log"
+      },
+      {
+        "at": "0x167d7c",
+        "kind": "bl",
+        "target": "WA_REGISTER_HANDLER",
+        "runtime": "waa_wa_register_authorise"
+      }
+    ]
+  },
+  "sal": {
+    "runtime_exports": [
+      "A_BIND",
+      "A_LISTEN",
+      "A_ACCEPT",
+      "A_RECV",
+      "A_SEND",
+      "A_FCNTL"
+    ],
+    "sha256": "155926d16ea80561f8ee508bc567928850b6a4cab814e0c188f8e465bc9bf055",
+    "functions": {
+      "A_AOA_CTOR": "0x1f6c4c",
+      "A_DTOR0": "0x1f79dc",
+      "A_DTOR1": "0x1f7c88",
+      "A_UCS": "0x1ede98",
+      "A_GAL_GET": "0x1ec64c",
+      "SAL_CHANGE_STATE": "0x1eafa4",
+      "SAL_CLEAR_CONFIG": "0x205b00",
+      "SAL_HMI_DISCOVERED": "0x25fb00",
+      "SAL_HMI_STATE": "0x255efc",
+      "SAL_HMI_CONNECT": "0x257798",
+      "SAL_HMI_DISCONNECT": "0x256cec",
+      "SAL_RUN_WORKER": "0x2262fc"
+    },
+    "data": {
+      "A_AOA_HANDLE": "0x88c32c",
+      "SAL_HMI_VTABLE": "0x384bb0"
+    },
+    "layout": {
+      "STOPFLAG_OFF": "0x2c",
+      "SAL_GAL_STATE": "0xa40",
+      "SAL_GAL_BYEBYE": "0xa44",
+      "SAL_GAL_CONFIG": "0x77c",
+      "SAL_GAL_STOPPING": "0x7e0",
+      "SAL_CONFIG_READY": "0x298",
+      "SAL_HMI_OBJECT": "0x564",
+      "SAL_HMI_LISTENER": "0x238",
+      "SAL_TRANSPORT_SLOTS": "0x10",
+      "SAL_SLOT_DTOR0": "0x0",
+      "SAL_SLOT_DTOR1": "0x1",
+      "SAL_SLOT_ABORT": "0x2",
+      "SAL_SLOT_READ": "0x3",
+      "SAL_SLOT_WRITE": "0x4",
+      "SAL_HMI_DEVICE_SIZE": "0x1c"
+    },
+    "hooks": [
+      {
+        "at": "0x1f1c9c",
+        "kind": "bl",
+        "target": "A_AOA_CTOR",
+        "runtime": "waa_tcp_ctor_hook"
+      },
+      {
+        "at": "0x382780",
+        "kind": "word",
+        "target": "A_UCS",
+        "runtime": "waa_ucs_wrapper"
+      },
+      {
+        "at": "0x382774",
+        "kind": "word",
+        "target": "A_HANDLETIMEOUT",
+        "runtime": "waa_tcp_pump"
+      },
+      {
+        "at": "0x383bcc",
+        "kind": "word",
+        "target": "A_HANDLETIMEOUT",
+        "runtime": "waa_hmi_worker"
+      },
+      {
+        "at": "0x384bb8",
+        "kind": "word",
+        "target": "SAL_HMI_CONNECT",
+        "runtime": "waa_hmi_connect"
+      },
+      {
+        "at": "0x384bbc",
+        "kind": "word",
+        "target": "SAL_HMI_DISCONNECT",
+        "runtime": "waa_hmi_disconnect"
+      },
+      {
+        "at": "0x2553b8",
+        "kind": "bl",
+        "target": "SAL_HMI_DISCOVERED",
+        "runtime": "waa_hmi_discovered"
+      },
+      {
+        "at": "0x383bc0",
+        "kind": "keep",
+        "target": "SAL_RUN_WORKER"
+      }
+    ]
+  },
+  "gal_sha256": [
+    "836f4e86426ba42aae19b0d6be4d88e6d9375e576845ff50445bb55b1d0432f1"
+  ],
+  "gal_reader_shape_sha256": "2fdd1b2b898cff9f0e762ec9f751799ef3737636738cf0a94e780e5f26736bb7",
+  "gal_reader": {
+    "shape_ranges": [
+      [
+        "0x84",
+        24
+      ],
+      [
+        "0xb8",
+        4
+      ]
+    ],
+    "copy_call": "0x9c",
+    "read_call": "0xbc",
+    "plt_max_distance": "0x20000"
+  }
+}

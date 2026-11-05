@@ -44,6 +44,11 @@ WirelessAdapter and SAL binaries, the addresses of the internal functions, data 
 structure offsets the runtime uses, the hook sites, and the accepted libc and GAL
 versions. Setup refuses any WA/SAL pair without an exact profile match.
 
+Older SAL builds may omit socket imports used by the bridge. A profile can list
+these in `sal.runtime_exports`; only known socket APIs absent from that executable
+are allowed. The bridge resolves them from loaded libraries before initialization
+and leaves the stock Worker running if any function is unavailable.
+
 To request a new version, run **Collect stock data** on that unit and open an issue
 with the firmware version. Any installation attempt on an unknown version creates the
 same archive automatically.
