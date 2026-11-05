@@ -1,3 +1,7 @@
+<p>
+  <img src="docs/assets/readme-logo-v2.png" alt="MIB STD2 WirelessBridge logo" width="140">
+</p>
+
 # MIB STD2 WirelessBridge
 
 > [!WARNING]
