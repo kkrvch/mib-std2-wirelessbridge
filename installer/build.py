@@ -42,6 +42,56 @@ def version():
     return value if re.fullmatch(VERSION_ID, value) else "unknown"
 
 
+def check_shell(path):
+    """Preserve shell errors and byte-level evidence from the failed package."""
+    result = subprocess.run(
+        ["sh", "-n", str(path)],
+        capture_output=True,
+        text=True,
+        errors="backslashreplace",
+    )
+    if not result.returncode:
+        return
+    data = path.read_bytes()
+    crlf = data.count(b"\r\n")
+    lf = data.count(b"\n") - crlf
+    bare_cr = data.count(b"\r") - crlf
+    nul = data.count(b"\x00")
+    bom = data.startswith(b"\xef\xbb\xbf")
+    metadata = (
+        f"bytes={len(data)}, CRLF={crlf}, LF={lf}, "
+        f"bare CR={bare_cr}, UTF-8 BOM={bom}, NUL={nul}"
+    )
+    report = [
+        f"Shell syntax check failed: {path}",
+        f"Command: sh -n {path}",
+        f"Exit status: {result.returncode}",
+        f"Setup version: {version()}",
+        f"Shell: {Path('/bin/sh').resolve()}",
+        f"SHA256: {sha256(data)}",
+        metadata,
+        f"stdout:\n{result.stdout}",
+        f"stderr:\n{result.stderr}",
+    ]
+    # Only bundled boot scripts: a captured stock startup may contain private data.
+    if path.name in ("select.sh", "run.sh"):
+        report.append("Script bytes by line (escaped; at most 120 lines):")
+        lines = data.split(b"\n")
+        report.extend(f"{i}: {line!r}" for i, line in enumerate(lines[:120], 1))
+        if len(lines) > 120:
+            report.append("[remaining lines omitted]")
+    log_path = workdir() / "build.log"
+    # Packaging may already have redirected buffered Python output to this log.
+    sys.stdout.flush()
+    with log_path.open("a") as log:
+        log.write("\n" + "\n".join(report) + "\n")
+    message = result.stderr.strip() or result.stdout.strip() or "No shell output"
+    raise RuntimeError(
+        f"Shell syntax check failed: {path.name} (exit {result.returncode})\n"
+        f"{message}\n{metadata}\nSee log: {log_path}"
+    )
+
+
 def package(output, release):
     output = Path(output)
     require(not output.exists(), "Package directory already exists")
@@ -69,7 +119,7 @@ def package(output, release):
     for name, data in files.items():
         write_new(output / name, data)
         if name.endswith(".sh") or name == "startup":
-            subprocess.run(["sh", "-n", str(output / name)], check=True)
+            check_shell(output / name)
     manifest = {
         "schema": 3,
         "release": release,
