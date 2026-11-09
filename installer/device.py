@@ -129,17 +129,19 @@ class Device:
         on inbound TCP (state from the SYN-ACK misses the peer's window scale),
         so passive downloads crawl at ~3 KB/s. MIB-initiated connections do not."""
         # The client address as the MIB sees it; ftpd checks PORT against it.
-        with connection_stage("FTP: STAT (discover client address)"):
-            found = re.search(r"Connected to (\S+)", self.ftp.sendcmd("STAT"))
         try:
-            self.client = str(ipaddress.IPv4Address(found[1] if found else ""))
-        except ValueError:
-            detail("FTP: STAT has no client IPv4 address; using passive mode")
-            return False
-        port = data_port()
-        try:
+            # STAT is optional too: some servers never finish its reply.
+            self.ftp.sock.settimeout(10)
+            with connection_stage("FTP: STAT (discover client address)"):
+                found = re.search(r"Connected to (\S+)", self.ftp.sendcmd("STAT"))
+            try:
+                self.client = str(ipaddress.IPv4Address(found[1] if found else ""))
+            except ValueError:
+                self.ftp.sock.settimeout(60)
+                detail("FTP: STAT has no client IPv4 address; using passive mode")
+                return False
+            port = data_port()
             if port:
-                self.ftp.sock.settimeout(10)
                 probe = REMOTE["pf.conf"]
                 data = bytearray()
                 with connection_stage(f"FTP: active download probe on port {port}"):
@@ -154,7 +156,7 @@ class Device:
                 detail("FTP: no active probe port available; using passive mode")
         except (OSError, EOFError, ftplib.Error) as error:
             detail(f"FTP: active probe failed ({error}); using passive mode")
-        # A failed data connection can leave a reply pending; start over.
+        # A failed STAT or data connection can leave a reply pending; start over.
         self.ftp.close()
         with connection_stage("FTP: reconnect for passive mode"):
             self.ftp = ftplib.FTP(host, timeout=60)
