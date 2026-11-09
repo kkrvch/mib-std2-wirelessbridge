@@ -8,7 +8,7 @@ import ipaddress
 import os
 
 from installer.build import version
-from installer.device import Device
+from installer.device import Device, connection_stage
 from installer.diagnostics import collect
 from installer.interface import (
     ACTIONS,
@@ -95,7 +95,8 @@ def main():
             del password
         remember_host(host)
         try:
-            state = inspect(device)
+            with connection_stage("MIB: inspect installed state"):
+                state = inspect(device)
         except BaseException:
             device.close()
             raise

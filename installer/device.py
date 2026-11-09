@@ -39,6 +39,22 @@ PORT_LOG = ROOT / "local" / "ftp-ports.json"
 ACTIVE_MINIMUM = 1448
 
 
+@contextmanager
+def connection_stage(label):
+    """Identify network failures without logging credentials or server replies."""
+    detail(label)
+    started = time.monotonic()
+    try:
+        yield
+    except (OSError, EOFError, ftplib.Error) as error:
+        reason = (
+            "timed out" if isinstance(error, TimeoutError) else type(error).__name__
+        )
+        raise ConnectionError(
+            f"{label}: {reason} ({time.monotonic() - started:.1f}s)"
+        ) from error
+
+
 def quote(path):
     require(
         path.startswith("/") and not any(c in path for c in "\r\n\x00"),
@@ -72,21 +88,28 @@ class Device:
     active = False  # Active-mode FTP downloads, verified at login.
 
     def __init__(self, host, password, *, connect_ftp=True):
-        self.session = Session(host, 23)
+        with connection_stage(f"Telnet: connect to {host}:23"):
+            self.session = Session(host, 23)
         self.ftp = None
         self._root_mount_flags = None
         self._checksum_path = None
         try:
-            wait_prompt(self.session, b"login:")
-            self.session.send("root")
-            wait_prompt(self.session, b"Password:")
-            self.session.send(password)
-            wait_prompt(self.session, b"#")
+            with connection_stage("Telnet: wait for login prompt"):
+                wait_prompt(self.session, b"login:")
+            with connection_stage("Telnet: send user, wait for password prompt"):
+                self.session.send("root")
+                wait_prompt(self.session, b"Password:")
+            with connection_stage("Telnet: authenticate, wait for root prompt"):
+                self.session.send(password)
+                wait_prompt(self.session, b"#")
             if connect_ftp:
-                self.ftp = ftplib.FTP(host, timeout=60)
-                self.ftp.login("root", password)
+                with connection_stage(f"FTP: connect to {host}:21 and read greeting"):
+                    self.ftp = ftplib.FTP(host, timeout=60)
+                with connection_stage("FTP: authenticate as root"):
+                    self.ftp.login("root", password)
             # The supported QNX image has pidin but no standalone id utility.
-            identity = self.command("pidin -p $$ user").decode("ascii")
+            with connection_stage("Telnet: verify root identity (pidin)"):
+                identity = self.command("pidin -p $$ user").decode("ascii")
             rows = re.findall(
                 r"(?m)^\s*\d+\s+\S+\s+(\d+)\s+\d+\s+(\d+)\s+\d+\s+(\d+)\s+\d+\s*$",
                 identity,
@@ -106,10 +129,12 @@ class Device:
         on inbound TCP (state from the SYN-ACK misses the peer's window scale),
         so passive downloads crawl at ~3 KB/s. MIB-initiated connections do not."""
         # The client address as the MIB sees it; ftpd checks PORT against it.
-        found = re.search(r"Connected to (\S+)", self.ftp.sendcmd("STAT"))
+        with connection_stage("FTP: STAT (discover client address)"):
+            found = re.search(r"Connected to (\S+)", self.ftp.sendcmd("STAT"))
         try:
             self.client = str(ipaddress.IPv4Address(found[1] if found else ""))
         except ValueError:
+            detail("FTP: STAT has no client IPv4 address; using passive mode")
             return False
         port = data_port()
         try:
@@ -117,16 +142,24 @@ class Device:
                 self.ftp.sock.settimeout(10)
                 probe = REMOTE["pf.conf"]
                 data = bytearray()
-                self._retrieve_active(probe, data.extend, port)
-                if len(data) == self.size(probe):
+                with connection_stage(f"FTP: active download probe on port {port}"):
+                    self._retrieve_active(probe, data.extend, port)
+                with connection_stage("FTP: SIZE (verify active download)"):
+                    expected = self.size(probe)
+                if len(data) == expected:
                     self.ftp.sock.settimeout(60)
                     return True
-        except (OSError, EOFError, ftplib.Error):
-            pass
+                detail("FTP: active probe size mismatch; using passive mode")
+            else:
+                detail("FTP: no active probe port available; using passive mode")
+        except (OSError, EOFError, ftplib.Error) as error:
+            detail(f"FTP: active probe failed ({error}); using passive mode")
         # A failed data connection can leave a reply pending; start over.
         self.ftp.close()
-        self.ftp = ftplib.FTP(host, timeout=60)
-        self.ftp.login("root", password)
+        with connection_stage("FTP: reconnect for passive mode"):
+            self.ftp = ftplib.FTP(host, timeout=60)
+        with connection_stage("FTP: authenticate again for passive mode"):
+            self.ftp.login("root", password)
         return False
 
     def _retrieve_active(self, path, callback, port):
