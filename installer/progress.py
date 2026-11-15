@@ -248,6 +248,16 @@ class Console:
         with self.lock:
             self.note = text
 
+    def warning(self, text):
+        """Keep the full reason above the transient footer, including in logs."""
+        with self.lock:
+            self.console.print(
+                Text(" ! " + text, style=WARN),
+                width=width(self.console),
+                no_wrap=False,
+                overflow="fold",
+            )
+
     def transfer(self, current, total):
         with self.lock:
             now = time.monotonic()
@@ -346,6 +356,11 @@ def detail(text, *, keep_transfer=False, plain=True):
 def summary(text):
     if console := _current.get():
         console.summary(text)
+
+
+def warning(text):
+    if console := _current.get():
+        console.warning(text)
 
 
 def transfer(current, total):

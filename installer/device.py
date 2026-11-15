@@ -24,7 +24,7 @@ from installer.paths import (
     ROOT,
     release_dir,
 )
-from installer.progress import detail, size, transfer
+from installer.progress import detail, size, transfer, warning
 from installer.transport import Session, read_command, wait_prompt
 
 PRIVATE = {"mode": 0o600, "uid": 0, "gid": 0}
@@ -138,7 +138,7 @@ class Device:
                 self.client = str(ipaddress.IPv4Address(found[1] if found else ""))
             except ValueError:
                 self.ftp.sock.settimeout(60)
-                detail("FTP: STAT has no client IPv4 address; using passive mode")
+                warning("FTP: STAT has no client IPv4 address; using passive mode")
                 return False
             port = data_port()
             if port:
@@ -151,11 +151,11 @@ class Device:
                 if len(data) == expected:
                     self.ftp.sock.settimeout(60)
                     return True
-                detail("FTP: active probe size mismatch; using passive mode")
+                warning("FTP: active probe size mismatch; using passive mode")
             else:
-                detail("FTP: no active probe port available; using passive mode")
+                warning("FTP: no active probe port available; using passive mode")
         except (OSError, EOFError, ftplib.Error) as error:
-            detail(f"FTP: active probe failed ({error}); using passive mode")
+            warning(f"FTP: active probe failed ({error}); using passive mode")
         # A failed STAT or data connection can leave a reply pending; start over.
         self.ftp.close()
         with connection_stage("FTP: reconnect for passive mode"):
@@ -237,9 +237,13 @@ class Device:
 
     def attrs(self, path):
         q = quote(path)
+        # Repeating the WA path overflows QNX's 256-byte terminal input buffer
+        # once read_command appends its completion marker. Keep the path local
+        # to a subshell and retain both the regular-file and no-symlink checks.
         lines = (
             self.command(
-                "test -f " + q + " && test ! -L " + q + " && LC_ALL=C ls -ldn " + q
+                "(waa_path=" + q + '; test -f "$waa_path" && test ! -L "$waa_path"'
+                ' && LC_ALL=C ls -ldn "$waa_path")'
             )
             .decode("ascii")
             .splitlines()
@@ -269,9 +273,31 @@ class Device:
         if port:
             self._retrieve_active(path, received, port)
         else:
-            self.ftp.retrbinary("RETR " + path, received, blocksize=64 * 1024)
+            self._retrieve_passive(path, received)
         require(len(data) == expected, "Incomplete file transfer: " + path)
         return bytes(data)
+
+    def _retrieve_passive(self, path, callback):
+        """Keep FTP setup, data reception and final reply failures distinct."""
+        name = PurePosixPath(path).name
+        with connection_stage(f"FTP TYPE I: {name}"):
+            self.ftp.voidcmd("TYPE I")
+        with connection_stage(f"FTP PASV/connect/RETR: {name}"):
+            connection = self.ftp.transfercmd("RETR " + path)
+        received = 0
+        with connection:
+            try:
+                with connection_stage(f"FTP data: {name}"):
+                    while True:
+                        chunk = connection.recv(64 * 1024)
+                        if not chunk:
+                            break
+                        received += len(chunk)
+                        callback(chunk)
+            except ConnectionError as error:
+                raise ConnectionError(f"{error}; received {received} bytes") from error
+        with connection_stage(f"FTP completion reply: {name}"):
+            self.ftp.voidresp()
 
     def _temporary(self):
         path = "/tsd/var/.wireless-aa-transfer-" + uuid.uuid4().hex + ".gz"
@@ -295,7 +321,8 @@ class Device:
                 + " > "
                 + quote(temporary)
             )
-            packed_size = self.ftp.size(temporary)
+            with connection_stage("FTP SIZE: compressed " + PurePosixPath(path).name):
+                packed_size = self.ftp.size(temporary)
             require(
                 type(packed_size) is int and packed_size > 0, "Cannot verify gzip size"
             )
@@ -350,11 +377,11 @@ class Device:
             self.command("rm -f " + quote(temporary))
 
     def parents(self, path):
-        checks = []
+        # One short command per parent also fits QNX's terminal input buffer
+        # for deeply nested release paths; stop at the first unsafe parent.
         for parent in reversed(PurePosixPath(path).parents):
             q = quote(str(parent))
-            checks.append("test -d " + q + " && test ! -L " + q)
-        self.command(" && ".join(checks))
+            self.command("test -d " + q + " && test ! -L " + q)
 
     def mkdir(self, path):
         self.parents(path)
@@ -370,8 +397,11 @@ class Device:
 
     def size(self, path):
         quote(path)
-        self.ftp.voidcmd("TYPE I")
-        value = self.ftp.size(path)
+        name = PurePosixPath(path).name
+        with connection_stage(f"FTP TYPE I before SIZE: {name}"):
+            self.ftp.voidcmd("TYPE I")
+        with connection_stage(f"FTP SIZE: {name}"):
+            value = self.ftp.size(path)
         require(type(value) is int and value >= 0, "Cannot verify file size: " + path)
         return value
 

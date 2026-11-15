@@ -54,7 +54,37 @@ the MIB access point.
 The computer must be able to reach the unit over Telnet and FTP, and the unit must be
 able to connect back to TCP ports 41000–41031 on the computer: downloads use active
 FTP, because the stock firewall stalls passive downloads to about 3 KB/s. If those
-ports are blocked, setup falls back to passive FTP and says so after connecting.
+ports are blocked, setup falls back to passive FTP. The reason remains in the
+console log, including whether `STAT` failed before the active transfer was tried.
+
+On Windows, the launcher already publishes TCP 41000–41031 from Docker. Allow
+incoming connections from the MIB to those ports in Windows Firewall. Run this
+once in **PowerShell as Administrator**, replacing `192.168.2.1` if the MIB uses
+another address:
+
+```powershell
+New-NetFirewallRule -Name 'WirelessBridge-ActiveFTP' `
+  -DisplayName 'WirelessBridge active FTP from MIB' `
+  -Direction Inbound -Action Allow -Protocol TCP `
+  -LocalPort 41000-41031 -RemoteAddress 192.168.2.1 -Profile Any
+```
+
+The rule applies even if Windows labels the MIB network Public, but only accepts
+traffic from that MIB address. Ports 21 (FTP control) and 23 (Telnet) are outbound
+connections from the computer to the MIB; they do not need inbound Windows rules.
+TCP 20 is the MIB's FTP data source port, not the listening port on Windows.
+See [Microsoft's firewall rule documentation](https://learn.microsoft.com/en-us/powershell/module/netsecurity/new-netfirewallrule).
+
+Restart setup after adding the rule. If the log still reports an active probe
+timeout, check for an explicit block on Docker Desktop Backend
+(`com.docker.backend.exe`) or another firewall/VPN blocking the MIB network;
+[Docker Desktop forwards published ports through its backend](https://docs.docker.com/desktop/features/networking/).
+If the reason instead mentions `STAT`, opening ports will not resolve that FTP
+server reply failure. To remove the Windows rule later:
+
+```powershell
+Remove-NetFirewallRule -Name 'WirelessBridge-ActiveFTP'
+```
 
 After connecting, setup shows what is on the unit: the firmware profile, the installed
 version and whether it is running or waits for a reboot, next to the version of this
